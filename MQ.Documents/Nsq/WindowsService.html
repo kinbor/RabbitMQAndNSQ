@@ -1,0 +1,11 @@
+﻿sc create nsqlookupd binpath= "D:\Software\Nsq\Nsq1.2.0\nsqlookupd.exe -http-address=0.0.0.0:9528 -tcp-address=0.0.0.0:9529" start= auto DisplayName= "nsqlookupd"
+sc description nsqlookupd "nsqlookupd 1.2.0"
+sc start nsqlookupd
+
+sc create nsqd binpath= "D:\Software\Nsq\Nsq1.2.0\nsqd.exe -mem-queue-size=0 -lookupd-tcp-address=0.0.0.0:9529 -tcp-address=0.0.0.0:9530 -http-address=0.0.0.0:9531 -https-address=0.0.0.0:9532 -data-path=D:\Software\Nsq\Nsq1.2.0\data" start= auto DisplayName= "nsqd"
+sc description nsqd "nsqd 1.2.0"
+sc start nsqd
+
+sc create nsqadmin binpath= "D:\Software\Nsq\Nsq1.2.0\nsqadmin.exe -lookupd-http-address=0.0.0.0:9528 -http-address=0.0.0.0:9527" start= auto DisplayName= "nsqadmin"
+sc description nsqadmin "nsqadmin 1.2.0"
+sc start nsqadmin

@@ -1,0 +1,332 @@
+﻿<!DOCTYPE html>
+
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <title>高性能消息队列NSQ</title>
+</head>
+<body>
+    <div style="width: 1220px; margin: 0 auto;">
+        <h2 id="toc_0">前言</h2>
+        <p>最近我再网上寻找使用golang实现的mq，因为我知道golang一般实现的应用部署起来很方便，所以我就找到了一个叫做nsq的mq，其实它并不能完全称为队列，但是它的轻量和性能的高效，让我真的大开眼界。</p>
+        <p>
+            如果你有兴趣，我觉得也可以了解一下：<br />
+            网上有人翻译了国外的一篇文章：<br />
+            <a href="/Nsq/mq7500yi.html" target="_blank">我们是如何使用NSQ处理7500亿消息的</a><br /><br />
+        </p>
+        <p>&nbsp;</p>
+
+        <h2 id="toc_1">安装和部署</h2>
+        <h4 id="toc_2">官网提供</h4>
+        <p>
+            如果你有能力的话直接阅读官方的说明进行操作就可以了<br />
+            <a href="https://nsq.io/overview/quick_start.html" target="_blank">https://nsq.io/overview/quick_start.html</a>
+        </p>
+        <p>如果看不懂我还找到了中文翻译过的：</p>
+        <p><a href="http://wiki.jikexueyuan.com/project/nsq-guide/" target="_blank">http://wiki.jikexueyuan.com/project/nsq-guide/</a></p>
+        <h4 id="toc_3">简单部署</h4>
+        <p>
+            下面是我使用的最快部署测试方式，使用服务器环境centos7.4，防火墙开放端口4160，4161，4151<br />
+            4171<br />
+            1、在下载页面下载对应版本(可能有的时候需要科学上网)<br />
+            <a href="https://nsq.io/deployment/installing.html">https://nsq.io/deployment/installing.html</a><br />
+            这里使用linux版本<br />
+            nsq-1.1.0.linux-amd64.go1.10.3.tar.gz
+        </p>
+        <p>
+            2、将包上传至服务器后解压；<br />
+            tar xvf nsq-1.1.0.linux-amd64.go1.10.3.tar.gz
+        </p>
+        <p>3、进入bin目录 cd nsq-1.1.0.linux-amd64.go1.10.3/bin</p>
+        <p>
+            4、后台启动三个服务<br />
+            nohup ./nsqlookupd &gt; /dev/null 2&gt;&amp;1 &amp;<br />
+            nohup ./nsqd --lookupd-tcp-address=127.0.0.1:4160 &gt; /dev/null 2&gt;&amp;1 &amp;<br />
+            nohup ./nsqadmin --lookupd-http-address=127.0.0.1:4161 &gt; /dev/null 2&gt;&amp;1 &amp;
+        </p>
+        <p>&nbsp;</p>
+        <h4 id="toc_4">简单使用</h4>
+        <p>
+            1、使用<br />
+            curl -d 'hello world' '<a href="http://127.0.0.1:4151/pub?topic=test">http://127.0.0.1:4151/pub?topic=test</a>'<br />
+            会创建一个test主题，并发送一个hello world消息
+        </p>
+        <p>
+            2、外部通过：<a href="http://127.0.0.1:4171/">http://127.0.0.1:4171/</a><br />
+            进行访问可以看到NSQ的管理界面，非常的简洁<br />
+            其中127.0.0.1为服务器IP<br />
+            <img src="/Nsq/index/1.jpg" alt="" width="1144" height="351" />￼
+        </p>
+        <p>
+            3、使用<br />
+            ./nsq_to_file --topic=test --output-dir=/tmp --lookupd-http-address=127.0.0.1:4161<br />
+            消费test中刚才的消息，并输出到服务器/tmp目录中
+        </p>
+        <p>&nbsp;</p>
+        <h2 id="toc_5">特性</h2>
+        <p>官方给出的文档给出了很多特性的说明，针对于一个MQ来说，我认为下面几个特性是你必须知道的：</p>
+        <ul>
+            <li>
+                <p>
+                    默认一开始消息不是持久化的<br />
+                    nsq采用的方式时内存+硬盘的模式，当内存到达一定程度时就会将数据持久化到硬盘<br />
+                    1、如果将 --mem-queue-size 设置为 0，所有的消息将会存储到磁盘。<br />
+                    2、但是即使服务器重启也会将当时在内存中的消息持久化
+                </p>
+            </li>
+            <li>
+                <p>
+                    消息是没有顺序的<br />
+                    这一点很关键，由于nsq使用内存+磁盘的模式，而且还有requeue的操作，所以发送消息的顺序和接收的顺序可能不一样
+                </p>
+            </li>
+            <li>
+                <p>
+                    官方不推荐使用客户端发消息<br />
+                    官方提供相应的客户端发送消息，但是HTTP可能更方便一些
+                </p>
+            </li>
+            <li>
+                <p>
+                    没有复制<br />
+                    nsq节点相对独立，节点与节点之间没有复制或者集群的关系。
+                </p>
+            </li>
+            <li>
+                <p>
+                    没有鉴权相关模块<br />
+                    当前release版本的nsq没有鉴权模块，只有版本v0.2.29+高于这个的才有
+                </p>
+            </li>
+            <li>
+                <p>
+                    几个小点<br />
+                    topic名称有长度限制，命名建议用下划线连接；<br />
+                    消息体大小有限制；
+                </p>
+            </li>
+
+        </ul>
+        <h2 id="toc_6">优缺点</h2>
+        <p>
+            优点：<br />
+            1、部署极其方便，没有任何环境依赖，直接启动就行<br />
+            2、轻量没有过多的配置参数，只需要简单的配置就可以直接使用<br />
+            3、性能高<br />
+            4、消息不存在丢失的情况
+        </p>
+        <p>
+            缺点：<br />
+            1、消息无顺序<br />
+            2、节点之间没有消息复制<br />
+            3、没有鉴权
+        </p>
+        <p>&nbsp;</p>
+        <h2 id="toc_7">多节点部署</h2>
+        <h4 id="toc_8">基本概念</h4>
+        <p>
+            nsqd：基本的节点<br />
+            nsqlookupd：汇总节点信息，提供查询和管理topic等服务<br />
+            nsqadmin：管理端展示UI界面，能有一个web页面去查看和操作
+        </p>
+        <h4 id="toc_9">结构</h4>
+        <p>
+            <img src="/Nsq/index/2.jpg" alt="" />￼<br />
+            最简单的多节点部署可以是这样的一个结构
+        </p>
+        <h4 id="toc_10">部署步骤和命令</h4>
+        <p>PS：后台启动使用nohup即可，下面只是为了说明启动方式和命令参数</p>
+        <p>
+            第一步需要启动nsqlookupd<br />
+            ./nsqlookupd<br />
+            默认占用4161和4160两个端口<br />
+            使用-http-address和-tcp-address可以修改
+        </p>
+        <p>
+            第二步启动两个nsqd<br />
+            ./nsqd -lookupd-tcp-address=192.168.1.102:4160 -broadcast-address=192.168.1.103 -data-path="/temp/nsq"<br />
+            其中<br />
+            -lookupd-tcp-address为上面nsqlookupd的IP和tcp的端口4160<br />
+            -broadcast-address我填写的是自己的IP，这个IP官网上写的是会注册到nsqlookupd<br />
+            -data-path为消息持久化的位置
+        </p>
+        <p>
+            第三步启动nsqadmin<br />
+            ./nsqadmin -lookupd-http-address=192.168.4.102:4161<br />
+            同样需要指定-lookupd-http-address但是这次是http的端口也就是4161因为admin通过http请求来查询相关信息
+        </p>
+        <h4 id="toc_11">后续扩展</h4>
+        <p>
+            上面只是最简单的两个节点的部署，如果后续想扩展就会如下<br />
+            <img src="/Nsq/index/3.jpg" alt="" />￼
+        </p>
+        <p>其中nginx是可以不需要的，你可以果断选择同时向多个节点发送消息，或者当消息没有处理的时候重新进行发送，因为这样也是nsq设计之初的考虑。你也可以根据自己的需要设计你自己的架构。</p>
+        <p>&nbsp;</p>
+        <h2 id="toc_12">客户端</h2>
+        <p>
+            官方提供了很多语言接入的客户端 <a href="https://nsq.io/clients/client_libraries.html">https://nsq.io/clients/client_libraries.html</a><br />
+            针对消息生产者的客户端，官方还推荐直接使用post请求发送消息，如：<br />
+            curl -d 'hello world' '<a href="http://127.0.0.1:4151/pub?topic=test">http://127.0.0.1:4151/pub?topic=test</a>'<br />
+            表示向test主题发送hello world这个消息
+        </p>
+        <p>下面介绍两种客户端，一种是golang的客户端，一种是java的客户端</p>
+        <h2 id="toc_13">Golang的客户端</h2>
+        <p>其中192.168.4.102:4150为发送消息的地址，消费者里面写的也是相同的地址就可以了。</p>
+        <h4 id="toc_14">生产者：</h4>
+        <div>
+            <pre>
+                <span style="color: #0000ff;">package</span>
+                <span style="color: #000000;"> main</span>
+                <span style="color: #0000ff;">import</span><span style="color: #000000;"> (</span>"github.com/nsqio/go-nsq"
+                    "time"<span style="color: #000000;">
+                )
+                func main() {
+                    </span><span style="color: #0000ff;">for</span> i := 0 ; i &lt; 10; i++<span style="color: #000000;">  {
+                        sendMessage()
+                    }
+                    time.Sleep(time.Second </span>* 10<span style="color: #000000;">)
+                }
+                func sendMessage() {
+                    url :</span>= "192.168.4.102:4150"<span style="color: #000000;">
+                    producer, err :</span>=<span style="color: #000000;"> nsq.NewProducer(url, nsq.NewConfig())
+                    </span><span style="color: #0000ff;">if</span> err !=<span style="color: #000000;"> nil {
+                        panic(err)
+                    }
+                    err </span>= producer.Publish("test", []<span style="color: #0000ff;">byte</span>("hello world"<span style="color: #000000;">))
+                    </span><span style="color: #0000ff;">if</span> err !=<span style="color: #000000;"> nil {
+                        panic(err)
+                    }
+                    producer.Stop()
+                }</span>
+            </pre>
+        </div>
+        <p>&nbsp;</p>
+        <p>&nbsp;</p>
+        <h4 id="toc_15">消费者：</h4>
+        <div>
+            <pre>
+                <span style="color: #0000ff;">package</span><span style="color: #000000;"> main
+                </span><span style="color: #0000ff;">import</span><span style="color: #000000;"> (
+                    </span>"fmt"
+                    "github.com/nsqio/go-nsq"
+                    "sync"<span style="color: #000000;">
+                )
+                func main() {
+                    testNSQ()
+                }
+                type NSQHandler struct {
+                }
+                func (</span><span style="color: #0000ff;">this</span> *NSQHandler) HandleMessage(msg *<span style="color: #000000;">nsq.Message) error {
+                    fmt.Println(</span>"receive", msg.NSQDAddress, "message:"<span style="color: #000000;">, string(msg.Body))
+                    </span><span style="color: #0000ff;">return</span><span style="color: #000000;"> nil
+                }
+                func testNSQ() {
+                    url :</span>= "192.168.4.102:4150"<span style="color: #000000;">
+    
+                    waiter :</span>=<span style="color: #000000;"> sync.WaitGroup{}
+                    waiter.Add(</span>1<span style="color: #000000;">)
+                    go func() {
+                        defer waiter.Done()
+                        config:</span>=<span style="color: #000000;">nsq.NewConfig()
+                        config.MaxInFlight</span>=9
+                            <span style="color: #0000ff;">for</span> i := 0; i&lt;10; i++<span style="color: #000000;"> {
+                            consumer, err :</span>= nsq.NewConsumer("test", "struggle"<span style="color: #000000;">, config)
+                            </span><span style="color: #0000ff;">if</span> nil !=<span style="color: #000000;"> err {
+                                fmt.Println(</span>"err"<span style="color: #000000;">, err)
+                                </span><span style="color: #0000ff;">return</span><span style="color: #000000;">
+                            }
+                            consumer.AddHandler(</span>&amp;<span style="color: #000000;">NSQHandler{})
+                            err </span>=<span style="color: #000000;"> consumer.ConnectToNSQD(url)
+                            </span><span style="color: #0000ff;">if</span> nil !=<span style="color: #000000;"> err {
+                                fmt.Println(</span>"err"<span style="color: #000000;">, err)
+                                </span><span style="color: #0000ff;">return</span><span style="color: #000000;">
+                            }
+                        }
+                        select{}
+                    }()
+                    waiter.Wait()
+                }</span>
+            </pre>
+        </div>
+        <p>&nbsp;</p>
+        <p>&nbsp;</p>
+        <p>&nbsp;</p>
+        <h2 id="toc_16">Java的客户端</h2>
+        <p>
+            说实话java的客户端确实用的人比较少，因为我看到实际在github上面的星星和关注就比较少，所以客户端多多少少都存在一些问题。nsq-j和JavaNSQClient是官方排的考前的客户端。<br />
+            这里说一下nsq-j<br />
+            <a href="https://github.com/sproutsocial/nsq-j">https://github.com/sproutsocial/nsq-j</a>
+        </p>
+        <h4 id="toc_17">生产者</h4>
+        <div>
+            <pre>
+            Publisher publisher = <span style="color: #0000ff;">new</span> Publisher("192.168.4.102:4150"<span style="color: #000000;">);
+            System.out.print(publisher);
+            </span><span style="color: #0000ff;">byte</span>[] data = "Hello nsq"<span style="color: #000000;">.getBytes();
+            publisher.publish(</span>"example_topic"<span style="color: #000000;">, data);
+            publisher.publish(</span>"example_topic"<span style="color: #000000;">, data);
+            </span><span style="color: #008000;">//</span><span style="color: #008000;"> 注意这里需要这样关闭，不然的话就阻塞住了</span>
+            publisher.getClient().stop();</pre>
+                    </div>
+                    <p>&nbsp;</p>
+                    <p>&nbsp;</p>
+                    <h4 id="toc_18">消费者</h4>
+                    <div>
+            <pre>
+                <span style="color: #0000ff;">public</span> <span style="color: #0000ff;">class</span><span style="color: #000000;"> PubExample {
+                    </span><span style="color: #0000ff;">public</span> <span style="color: #0000ff;">static</span> <span style="color: #0000ff;">void</span> handleData(<span style="color: #0000ff;">byte</span><span style="color: #000000;">[] data) {
+                        System.out.println(</span>"Received:" + <span style="color: #0000ff;">new</span><span style="color: #000000;"> String(data));
+                    }
+                    </span><span style="color: #0000ff;">public</span> <span style="color: #0000ff;">static</span> <span style="color: #0000ff;">void</span><span style="color: #000000;"> main(String[] args) {
+                        Subscriber subscriber </span>= <span style="color: #0000ff;">new</span> Subscriber("192.168.4.102:4161"<span style="color: #000000;">);
+                        subscriber.subscribe(</span>"test", "struggle"<span style="color: #000000;">, PubExample::handleData);
+                    }
+                }</span>
+            </pre>
+        </div>
+        <p>&nbsp;</p>
+        <p>&nbsp;</p>
+        <p>需要注意的是其中192.168.4.102:4161这个是nsqlookupd的http地址和端口和生产者是不一样的</p>
+        <p>java客户端是根据nsqlookupd来找到对应消费端口</p>
+        <p>
+            所以启动nsqlookupd的时候需要注意，启动nsqd需要加上参数--broadcast-address<br />
+            如：./nsqd --lookupd-tcp-address=127.0.0.1:4160 --broadcast-address=192.168.4.102
+        </p>
+        <p>
+            这样java消费者才能找到对应的地址否则会出现<br />
+            ERROR com.sproutsocial.nsq.Subscription - error connecting to:localhost.localdomain:4150<br />
+            java.net.UnknownHostException: localhost.localdomain<br />
+            这样类似的错误
+        </p>
+        <p>&nbsp;</p>
+        <h2 id="toc_19">我建议的客户端</h2>
+        <p>官方也说了，发送消息其实不建议使用客户端，而建议使用http请求，所以我自己是使用okhttp进行消息的发送，案例如下:</p>
+        <div class="cnblogs_code">
+<pre>OkHttpClient client = <span style="color: #0000ff;">new</span><span style="color: #000000;"> OkHttpClient();
+MediaType mediaType </span>= MediaType.parse("application/json"<span style="color: #000000;">);
+RequestBody body </span>= RequestBody.create(mediaType, "{"code": 1}"<span style="color: #000000;">);
+Request request </span>= <span style="color: #0000ff;">new</span><span style="color: #000000;"> Request.Builder()
+.url(</span>"http://192.168.4.102:4151/pub?topic=test"<span style="color: #000000;">)
+.post(body)
+.addHeader(</span>"Content-Type", "application/json"<span style="color: #000000;">)
+.build();
+Response response </span>=<span style="color: #000000;"> client.newCall(request).execute();
+System.out.println(response);</span></pre>
+        </div>
+        <p>当然这里没有对client进行配置，这就涉及okhttp了，这里不再赘述</p>
+        <p>至于消费端还是使用nsq-j的</p>
+        <p>&nbsp;</p>
+        <h2 id="toc_20">总结</h2>
+        <p>
+            使用下来我们可以看到，nsq为了提供性能在一些方面是做出了妥协的，我们可以总结出下面几个方面供大家参考：<br />
+            1、暂时nsq的鉴权功能在高版本才支持，但是高版本没有release所以建议nsq在内网环境下使用，或者在一些安全的端口使用，避免被攻击<br />
+            2、部署节点在3个以上，nsq已经对于消息丢失做了很多的考虑，基本上不会出现丢失的情况，在你考虑幂等性的情况下，同时部署多个节点有利于消息进行处理<br />
+            3、如果对消息顺序有要求的情况下，nsq是不能使用的，因为nsq不能保证消息的顺序<br />
+            4、节点之间没有消息复制，所以即使多个节点部署，万一节点出现问题，还是有一段时间会出现消息无法接收到的情况，所以向多个节点同时发送消息也是一种解决方式<br />
+            5、因为nsq抛弃了一些东西，那么所带来的自然是方便，整体使用下来主要感受就是轻量，部署和配置都很方便，而且对于节点的监控能有界面
+        </p>
+        <p>希望后续nsq能在几个版本更新之后能给我们带来更加牛逼的表现。</p>
+        <p>&nbsp;</p>
+    </div>
+</body>
+</html>
